@@ -1,0 +1,165 @@
+{
+  "name": "chat-party",
+  "version": "1.0.1",
+  "description": "一个同时与多个AI模型对话的桌面应用程序",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "node scripts/dev.js",
+    "prod": "node scripts/prod.js",
+    "build:prod": "node scripts/build-prod.js",
+    "dev:vite": "vite",
+    "build": "vite build && electron-builder",
+    "build:mac": "vite build && electron-builder --mac --publish=never",
+    "build:mac:arm64": "vite build && electron-builder --mac --arm64 --publish=never",
+    "build:mac:x64": "vite build && electron-builder --mac --x64 --publish=never",
+    "build:mac:universal": "vite build && electron-builder --mac --universal --publish=never",
+    "build:win": "vite build && electron-builder --win --publish=never",
+    "preview": "vite preview",
+    "electron:dev": "vite build && electron .",
+    "electron:pack": "electron-builder",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:build": "node scripts/test-build.js",
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",
+    "format": "prettier --write src/"
+  },
+  "keywords": [
+    "electron",
+    "vue3",
+    "typescript",
+    "ai",
+    "chat"
+  ],
+  "author": "ccjy",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.14.0",
+    "@typescript-eslint/parser": "^6.14.0",
+    "@vitejs/plugin-vue": "^4.5.2",
+    "@vitest/ui": "^3.2.4",
+    "@vue/test-utils": "^2.4.6",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "eslint": "^8.55.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.29.0",
+    "eslint-plugin-vue": "^9.19.2",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.1.1",
+    "terser": "^5.43.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8",
+    "vite-plugin-electron": "^0.15.5",
+    "vite-plugin-electron-renderer": "^0.14.5",
+    "vitest": "^3.2.4",
+    "vue-tsc": "^1.8.25"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.1",
+    "element-plus": "^2.4.4",
+    "marked": "^18.0.4",
+    "pinia": "^2.1.7",
+    "vue": "^3.3.11",
+    "vue-router": "^4.2.5"
+  },
+  "build": {
+    "appId": "com.chatallai.app",
+    "productName": "ChatParty",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "electronDownload": {
+      "cache": "./electron-cache"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "dist/**/*",
+      "!node_modules/**/*",
+      "!tests/**/*",
+      "!docs/**/*",
+      "!examples/**/*",
+      "!.*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules/@element-plus/icons-vue/dist/**/*",
+        "to": "extra-resources/@element-plus/icons-vue",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "node_modules/element-plus/dist/**/*",
+        "to": "extra-resources/element-plus",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "node_modules/pinia/dist/**/*",
+        "to": "extra-resources/pinia",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "node_modules/vue/dist/**/*",
+        "to": "extra-resources/vue",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "node_modules/vue-router/dist/**/*",
+        "to": "extra-resources/vue-router",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "public/icons/chatparty-icon.png",
+      "gatekeeperAssess": false,
+      "type": "distribution",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": false
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/icons/chatparty-icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "compression": "normal",
+    "removePackageScripts": true,
+    "asar": {
+      "smartUnpack": false
+    }
+  }
+}

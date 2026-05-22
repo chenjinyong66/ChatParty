@@ -1,0 +1,100 @@
+/**
+ * 登录状态检查脚本工具类
+ * 提供不同AI网站的登录状态检查脚本
+ *
+ * @author huquanzhi
+ * @since 2024-12-19 14:30
+ * @version 1.0
+ */
+
+/**
+ * 获取登录状态检查脚本
+ * @param providerId AI提供商ID
+ * @returns 对应的JavaScript脚本字符串
+ */
+import { useScriptConfigStore } from '../stores/scriptConfig'
+import type { ScriptType } from '../types'
+
+function resolveScript(
+  providerId: string,
+  scriptType: ScriptType,
+  defaultScript: string,
+  params?: Record<string, string>
+): string {
+  try {
+    const store = useScriptConfigStore()
+    const custom = store.getCustomScript(providerId, scriptType)
+    if (custom) {
+      let result = custom
+      if (params) {
+        Object.keys(params).forEach((key) => {
+          result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), params[key])
+        })
+      }
+      return result
+    }
+  } catch {
+    // Store not available, use default
+  }
+  return defaultScript
+}
+
+export function getLoginCheckScript(providerId: string): string {
+  const scripts: Record<string, string> = {
+    kimi: `
+      // 检查是否存在用户头像或登录相关元素
+      !!(document.querySelector("[class='user-name']") && 
+      document.querySelector("[class='user-name']").innerText != '登录')
+    `,
+    grok: `
+      // 检查grok的登录状态
+      !document.querySelector('[href="/sign-in"]')
+    `,
+    deepseek: `
+      // 检查DeepSeek的登录状态
+      !(document.querySelector('.ds-sign-up-form__register-button') && 
+      document.querySelector('.ds-sign-up-form__register-button').textContent.trim() === '登录')
+    `,
+    doubao: `
+      // 检查豆包的登录状态
+      // 如果 .semi-button-content 元素存在且文本包含"登录"，则认为未登录
+      !Array.from(document.querySelectorAll('.semi-button-content'))
+        .some(el => el.textContent && el.textContent.includes('登录'))
+    `,
+    qwen: `
+      // 检查通义千问的登录状态
+      !Array.from(document.querySelectorAll('button'))
+        .some(btn => btn.textContent.trim() === '立即登录')
+    `,
+    copilot: `
+      // 检查Copilot的登录状态
+      !(document.querySelector('[alt="Profile image"]'))
+    `,
+    glm: '!document.querySelector(".login-btn")',
+    yuanbao: `
+      // 检查yuanbao的登录状态
+      !(document.querySelector('.agent-dialogue__tool__login') && 
+      (document.querySelector('.agent-dialogue__tool__login').textContent === '登录'))
+    `,
+    miromind: `
+      !((document.querySelector('[class="ant-space-item"]')) &&   
+      (document.querySelector('[class="ant-space-item"]').innerText === '登录'))
+    `,
+    gemini: `
+      !!document.querySelector('.gb_be')
+    `,
+    chatgpt: `
+      !!document.querySelector('[alt="Profile image"]')
+    `,
+    mimo: `
+      !Array.from(document.querySelectorAll('[type="button"]'))
+                   .some(btn => btn.textContent.trim() === '立即登录');
+    `,
+    minimax: `
+      !Array.from(document.querySelectorAll('button'))
+        .some(btn => btn.textContent.trim() === '登 录')
+    `
+  }
+
+  return resolveScript(providerId, 'loginCheck', scripts[providerId] || 'false')
+}

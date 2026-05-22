@@ -1,0 +1,21 @@
+/* 全局样式 - 高亮闪烁动画（用于跳转到AI卡片时） */
+
+@keyframes highlight-flash {
+  0%, 100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  25% {
+    box-shadow: 0 0 0 4px var(--el-color-primary-light-5);
+  }
+  50% {
+    box-shadow: 0 0 0 2px var(--el-color-primary-light-7);
+  }
+  75% {
+    box-shadow: 0 0 0 4px var(--el-color-primary-light-5);
+  }
+}
+
+.highlight-flash {
+  animation: highlight-flash 0.6s ease-in-out 3;
+  border-radius: 8px;
+}
