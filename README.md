@@ -4,6 +4,10 @@
 
 一个基于 Electron + Vue3 + TypeScript 构建的桌面应用程序，让用户可以在单一界面同时与多个 AI 模型对话，实现高效的多模型对比和协作。支持 DeepSeek、豆包、通义千问、Kimi、Grok、Copilot、GLM、元宝、ChatGPT、Gemini、Mimo 等主流 AI 模型。
 
+### 主界面预览
+
+![主界面](./images/主界面.png)
+
 ## 核心功能
 
 ### 1. 多AI模型并行对话
@@ -48,6 +52,9 @@
 - **主题切换**：支持浅色、深色和跟随系统主题
 - **自定义脚本**：为每个 AI 提供商自定义 JavaScript 脚本（消息提取、登录检查、发送消息等）
 - **代理配置**：为每个 AI 模型单独配置网络代理
+
+![代理配置](./images/代理.png)
+![代理配置](./images/多模型讨论.png)
 - **Prompt 管理**：支持自定义 Prompt 的创建、编辑、分类和快捷应用
 
 ## 支持的AI模型
@@ -73,7 +80,7 @@
 
 ```bash
 # 克隆项目
-git clone https://github.com/hqzqaq/chatAllAI2.git
+git clone https://github.com/chenjinyong66/ChatParty.git
 
 # 安装依赖
 npm install
@@ -140,6 +147,8 @@ sudo xattr -d com.apple.quarantine /Applications/ChatAllAI.app
 | 构建工具 | Vite + Electron Builder |
 
 ### 核心模块
+
+![整体架构](./images/整体架构.png)
 
 ```
 src/
