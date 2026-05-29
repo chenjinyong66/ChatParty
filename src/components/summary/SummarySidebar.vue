@@ -1,46 +1,39 @@
 <template>
-  <div
-    class="side-panel"
-    :class="{ collapsed: isCollapsed }"
-  >
-    <!-- 折叠切换按钮 -->
-    <div
-      class="collapse-toggle"
-      :class="{ collapsed: isCollapsed }"
-      :title="isCollapsed ? '展开侧边栏' : '收起侧边栏'"
-      @click="toggleCollapse"
-    >
-      <div class="toggle-button">
-        <div class="collapse-arrow" />
-      </div>
+  <div class="side-panel" :class="{ collapsed: isCollapsed }">
+    <!-- 收起时的展开按钮 -->
+    <div v-if="isCollapsed" class="expand-trigger" @click="toggleCollapse" title="展开面板">
+      <el-icon :size="18">
+        <ArrowLeft />
+      </el-icon>
     </div>
 
     <!-- 侧边栏内容 -->
     <div v-show="!isCollapsed" class="sidebar-content">
+      <!-- 右上角关闭按钮 -->
+      <div class="panel-close-btn" @click="toggleCollapse" title="关闭面板">
+        <el-icon :size="14">
+          <Close />
+        </el-icon>
+      </div>
+
       <!-- Tab 切换 -->
       <div class="sidebar-tabs">
-        <div
-          class="tab-item"
-          :class="{ active: activeTab === 'comparison' }"
-          @click="activeTab = 'comparison'"
-        >
-          <el-icon :size="14"><ScaleToOriginal /></el-icon>
+        <div class="tab-item" :class="{ active: activeTab === 'comparison' }" @click="activeTab = 'comparison'">
+          <el-icon :size="14">
+            <ScaleToOriginal />
+          </el-icon>
           <span>对比</span>
         </div>
-        <div
-          class="tab-item"
-          :class="{ active: activeTab === 'summary' }"
-          @click="activeTab = 'summary'"
-        >
-          <el-icon :size="14"><DocumentChecked /></el-icon>
+        <div class="tab-item" :class="{ active: activeTab === 'summary' }" @click="activeTab = 'summary'">
+          <el-icon :size="14">
+            <DocumentChecked />
+          </el-icon>
           <span>总结</span>
         </div>
-        <div
-          class="tab-item"
-          :class="{ active: activeTab === 'discussion' }"
-          @click="activeTab = 'discussion'"
-        >
-          <el-icon :size="14"><ChatLineRound /></el-icon>
+        <div class="tab-item" :class="{ active: activeTab === 'discussion' }" @click="activeTab = 'discussion'">
+          <el-icon :size="14">
+            <ChatLineRound />
+          </el-icon>
           <span>讨论</span>
         </div>
       </div>
@@ -54,18 +47,8 @@
       <div v-show="activeTab === 'summary'" class="tab-panel">
         <div class="panel-header">
           <span class="header-title">AI 总结</span>
-          <el-select
-            v-model="selectedModelId"
-            size="small"
-            class="model-select"
-            @change="handleModelChange"
-          >
-            <el-option
-              v-for="p in availableProviders"
-              :key="p.id"
-              :label="p.name"
-              :value="p.id"
-            >
+          <el-select v-model="selectedModelId" size="small" class="model-select" @change="handleModelChange">
+            <el-option v-for="p in availableProviders" :key="p.id" :label="p.name" :value="p.id">
               <div class="provider-option">
                 <img :src="p.icon" class="provider-icon-small" @error="handleIconError">
                 <span>{{ p.name }}</span>
@@ -74,13 +57,8 @@
           </el-select>
         </div>
         <div class="ai-card-container">
-          <AICard
-            v-if="provider"
-            :key="summaryProviderId"
-            :provider="provider"
-            :config="cardConfig"
-            class="summary-ai-card"
-          />
+          <AICard v-if="provider" :key="summaryProviderId" :provider="provider" :config="cardConfig"
+            class="summary-ai-card" />
         </div>
       </div>
 
@@ -88,13 +66,20 @@
       <div v-show="activeTab === 'discussion'" class="tab-panel discussion-panel-wrapper">
         <DiscussionPanel ref="discussionPanelRef" />
       </div>
+
+      <!-- 底部收起按钮 -->
+      <div class="collapse-trigger" @click="toggleCollapse" title="收起面板">
+        <el-icon :size="18">
+          <ArrowRight />
+        </el-icon>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { DocumentChecked, ChatLineRound, ScaleToOriginal } from '@element-plus/icons-vue'
+import { DocumentChecked, ChatLineRound, ScaleToOriginal, ArrowLeft, ArrowRight, Close } from '@element-plus/icons-vue'
 import AICard from '../chat/AICard.vue'
 import DiscussionPanel from '../chat/DiscussionPanel.vue'
 import ComparisonPanel from '../chat/ComparisonPanel.vue'
@@ -219,12 +204,13 @@ defineExpose({ showDiscussion, showSummary, showComparison, activeTab })
   right: 0;
   top: 0;
   height: 100vh;
-  width: 50%;
+  width: 65%;
+  max-width: 960px;
   background: var(--el-bg-color);
   border-left: 1px solid var(--el-border-color);
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.08);
   z-index: 1000;
-  transition: transform 0.3s ease;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
 }
 
@@ -232,45 +218,79 @@ defineExpose({ showDiscussion, showSummary, showComparison, activeTab })
   transform: translateX(100%);
 }
 
-/* 折叠按钮 */
-.collapse-toggle {
+.expand-trigger {
   position: absolute;
-  left: -32px;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 1001;
-}
-
-.toggle-button {
-  width: 28px;
-  height: 60px;
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color);
-  border-radius: 8px 0 0 8px;
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+  left: -36px;
+  bottom: 80px;
+  width: 32px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: var(--el-color-primary-light-7);
+  color: var(--el-color-primary);
+  border-radius: 8px 0 0 8px;
   cursor: pointer;
-  transition: all 0.3s;
+  border: 1px solid var(--el-color-primary-light-5);
+  border-right: none;
+  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.08);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.toggle-button:hover {
-  background: var(--el-fill-color-light);
+.expand-trigger:hover {
+  background: var(--el-color-primary);
+  color: #fff;
+  border-color: var(--el-color-primary);
+  box-shadow: -3px 0 14px rgba(0, 0, 0, 0.15);
+}
+
+.collapse-trigger {
+  position: absolute;
+  left: -32px;
+  bottom: 80px;
   width: 32px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--el-color-primary-light-7);
+  color: var(--el-color-primary);
+  border-radius: 8px 0 0 8px;
+  cursor: pointer;
+  border: 1px solid var(--el-color-primary-light-5);
+  border-right: none;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 5;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.08);
 }
 
-.collapse-arrow {
-  width: 0;
-  height: 0;
-  border-top: 5px solid transparent;
-  border-bottom: 5px solid transparent;
-  border-left: 6px solid var(--el-text-color-regular);
-  transition: transform 0.3s;
+.collapse-trigger:hover {
+  background: var(--el-color-primary);
+  color: #fff;
 }
 
-.side-panel.collapsed .collapse-arrow {
-  transform: rotate(180deg);
+.panel-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: pointer;
+  background: #f56c6c;
+  color: #fff;
+  transition: all 0.2s;
+  z-index: 10;
+  box-shadow: 0 2px 6px rgba(245, 108, 108, 0.4);
+}
+
+.panel-close-btn:hover {
+  background: #e04040;
+  box-shadow: 0 3px 10px rgba(245, 108, 108, 0.6);
+  transform: scale(1.1);
 }
 
 /* 侧边栏内容 */

@@ -38,7 +38,7 @@
           <el-button-group size="small">
             <el-button
               :loading="loadingStates[provider.id]"
-              @click="checkSession(provider.id)"
+              @click="checkSingleSession(provider.id)"
             >
               检查
             </el-button>
@@ -68,7 +68,7 @@
         title="已登录网站"
         :value="loggedInCount"
         :total="totalCount"
-        suffix="/ 6"
+        :suffix="`/ ${totalCount}`"
       />
     </div>
   </div>
@@ -76,11 +76,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElNotification } from 'element-plus'
 import type { AIProvider } from '../../types'
 import { useChatStore } from '../../stores'
 
-// Props
 interface Props {
   providers: AIProvider[]
 }
@@ -89,53 +88,49 @@ const props = defineProps<Props>()
 
 const chatStore = useChatStore()
 
-// 响应式数据
 const isRefreshing = ref(false)
 const loadingStates = ref<Record<string, boolean>>({})
 const savingStates = ref<Record<string, boolean>>({})
 const clearingStates = ref<Record<string, boolean>>({})
-
-// 响应式数据 - 会话状态
 const sessionStates = ref<Record<string, boolean>>({})
 
-// 计算属性
 const loggedInCount = computed(() => Object.values(sessionStates.value).filter((state) => state).length)
-
 const totalCount = computed(() => props.providers.length)
 
-/**
- * 检查单个会话状态
- */
-const checkSession = async(providerId: string): Promise<void> => {
-  if (!window.electronAPI) return
+const checkSessionSilent = async(providerId: string): Promise<boolean> => {
+  if (!window.electronAPI) return false
 
   loadingStates.value[providerId] = true
 
   try {
-    // 直接从本地文件加载会话数据
     const loadResponse = await window.electronAPI.loadSession({ providerId })
-    console.log('loadSession response:', loadResponse)
 
     if (loadResponse.exists && loadResponse.sessionData) {
-      // 成功加载会话数据，更新登录状态
       sessionStates.value[providerId] = true
-      ElMessage.success(`${getProviderName(providerId)} 会话有效`)
+      return true
     } else {
-      // 无法加载会话数据，标记为未登录
       sessionStates.value[providerId] = false
-      ElMessage.info(`${getProviderName(providerId)} 未登录`)
+      return false
     }
   } catch (error) {
     console.error(`Failed to check session for ${providerId}:`, error)
-    ElMessage.error(`检查 ${getProviderName(providerId)} 会话失败`)
+    sessionStates.value[providerId] = false
+    return false
   } finally {
     loadingStates.value[providerId] = false
   }
 }
 
-/**
- * 保存单个会话
- */
+const checkSingleSession = async(providerId: string): Promise<void> => {
+  const isLoggedIn = await checkSessionSilent(providerId)
+  const name = getProviderName(providerId)
+  if (isLoggedIn) {
+    ElMessage.success(`${name} 会话有效`)
+  } else {
+    ElMessage.info(`${name} 未登录`)
+  }
+}
+
 const saveSession = async(providerId: string): Promise<void> => {
   if (!window.electronAPI) return
 
@@ -157,9 +152,6 @@ const saveSession = async(providerId: string): Promise<void> => {
   }
 }
 
-/**
- * 清除单个会话
- */
 const clearSession = async(providerId: string): Promise<void> => {
   if (!window.electronAPI) return
 
@@ -169,7 +161,6 @@ const clearSession = async(providerId: string): Promise<void> => {
     const response = await window.electronAPI.clearSession({ providerId })
 
     if (response.success) {
-      // 更新登录状态
       sessionStates.value[providerId] = false
       ElMessage.success(`${getProviderName(providerId)} 会话已清除`)
     } else {
@@ -183,17 +174,43 @@ const clearSession = async(providerId: string): Promise<void> => {
   }
 }
 
-/**
- * 刷新所有会话状态
- */
 const refreshAllSessions = async(): Promise<void> => {
   isRefreshing.value = true
 
   try {
-    const checkPromises = props.providers.map((provider) => checkSession(provider.id))
+    const results = await Promise.allSettled(
+      props.providers.map((provider) => checkSessionSilent(provider.id))
+    )
 
-    await Promise.allSettled(checkPromises)
-    ElMessage.success('所有会话状态已刷新')
+    const loggedIn = props.providers.filter(
+      (p, i) => results[i].status === 'fulfilled' && results[i].value
+    )
+    const notLoggedIn = props.providers.filter(
+      (p, i) => results[i].status === 'fulfilled' && !results[i].value
+    )
+    const failed = props.providers.filter(
+      (p, i) => results[i].status === 'rejected'
+    )
+
+    const lines: string[] = []
+    if (loggedIn.length > 0) {
+      lines.push(`<div style="color:var(--el-color-success);margin:4px 0">✅ 已登录 (${loggedIn.length}): ${loggedIn.map((p) => p.name).join('、')}</div>`)
+    }
+    if (notLoggedIn.length > 0) {
+      lines.push(`<div style="color:var(--el-color-info);margin:4px 0">⚪ 未登录 (${notLoggedIn.length}): ${notLoggedIn.map((p) => p.name).join('、')}</div>`)
+    }
+    if (failed.length > 0) {
+      lines.push(`<div style="color:var(--el-color-danger);margin:4px 0">❌ 检测失败 (${failed.length}): ${failed.map((p) => p.name).join('、')}</div>`)
+    }
+
+    ElNotification({
+      title: `状态刷新完成 — ${loggedIn.length}/${props.providers.length} 已登录`,
+      dangerouslyUseHTMLString: true,
+      message: lines.join(''),
+      type: failed.length > 0 ? 'warning' : 'success',
+      duration: 5000,
+      position: 'top-right'
+    })
   } catch (error) {
     console.error('Failed to refresh all sessions:', error)
     ElMessage.error('刷新会话状态失败')
@@ -202,32 +219,22 @@ const refreshAllSessions = async(): Promise<void> => {
   }
 }
 
-/**
- * 获取提供商名称
- */
 const getProviderName = (providerId: string): string => {
   const provider = props.providers.find((p) => p.id === providerId)
   return provider?.name || providerId
 }
 
-/**
- * 初始化加载状态
- */
 const initializeStates = (): void => {
   props.providers.forEach((provider) => {
     loadingStates.value[provider.id] = false
     savingStates.value[provider.id] = false
     clearingStates.value[provider.id] = false
-    // 初始化会话状态为false
     sessionStates.value[provider.id] = false
   })
 }
 
-// 生命周期
 onMounted(() => {
   initializeStates()
-  // 自动检查所有会话状态
-  refreshAllSessions()
 })
 </script>
 
@@ -249,10 +256,6 @@ onMounted(() => {
 .session-header h3 {
   margin: 0;
   color: var(--el-text-color-primary);
-}
-
-.session-list {
-  space-y: 8px;
 }
 
 .session-item {

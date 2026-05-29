@@ -4,13 +4,16 @@
  */
 
 import {
-  ipcMain, IpcMainEvent, IpcMainInvokeEvent
+  ipcMain, IpcMainEvent, IpcMainInvokeEvent, app, dialog, session, BrowserView, WebContentsView
 } from 'electron'
 import { EventEmitter } from 'events'
+import { join, basename, extname } from 'path'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, readdirSync } from 'fs'
 import { WindowManager } from './WindowManager'
 import { SessionManager } from './SessionManager'
 import { getSendMessageScript } from '../../src/utils/MessageScripts'
 import { getStatusMonitorScript } from '../../src/utils/StatusMonitorScripts'
+import { getFileUploadScript } from '../../src/utils/UploadScripts'
 import {
   IPCChannel,
   IPCRequest,
@@ -34,7 +37,14 @@ import {
   AIStatusStartMonitoringRequest,
   AIStatusStartMonitoringResponse,
   AIStatusInfo,
-  AIStatusChangeEvent
+  AIStatusChangeEvent,
+  FileOpenDialogRequest,
+  FileOpenDialogResponse,
+  FileReadRequest,
+  FileReadResponse,
+  UploadFileData,
+  FileUploadToWebViewRequest,
+  FileUploadToWebViewResponse
 } from '../../src/types/ipc'
 
 /**
@@ -168,7 +178,65 @@ export class IPCHandler extends EventEmitter {
       return path.resolve(__dirname, preloadName)
     })
 
-    // 新增：清除指定provider的存储数据（用于解决Gemini登录问题）
+    // 文件对话框
+    ipcMain.handle('open-file-dialog', async(_event, data?: FileOpenDialogRequest) => {
+      try {
+        const mainWindow = this.windowManager.getMainWindow()
+        const options: Electron.OpenDialogOptions = {
+          properties: ['openFile', ...(data?.multiSelections !== false ? ['multiSelections'] : [])],
+          title: '选择要发送的文件'
+        }
+        if (data?.filters) options.filters = data.filters
+        const result = mainWindow
+          ? await dialog.showOpenDialog(mainWindow, options)
+          : await dialog.showOpenDialog(options)
+        return { canceled: result.canceled, filePaths: result.filePaths }
+      } catch (error) {
+        console.error('[IPCHandler] Failed to open file dialog:', error)
+        return { canceled: true, filePaths: [] }
+      }
+    })
+
+    ipcMain.handle('file:read', async(_event, data: FileReadRequest): Promise<FileReadResponse> => {
+      try {
+        const filePath = data.filePath
+        if (!existsSync(filePath)) {
+          return { success: false, name: '', size: 0, mimeType: '', base64: '', error: 'File not found' }
+        }
+        const buffer = readFileSync(filePath)
+        const name = basename(filePath)
+        const ext = extname(filePath).toLowerCase()
+        const mimeType = getMimeType(ext)
+        const base64 = buffer.toString('base64')
+        return { success: true, name, size: buffer.length, mimeType, base64 }
+      } catch (error) {
+        return {
+          success: false,
+          name: '',
+          size: 0,
+          mimeType: '',
+          base64: '',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
+      }
+    })
+
+    ipcMain.handle('file:upload-to-webview', async(_event, data: FileUploadToWebViewRequest): Promise<FileUploadToWebViewResponse> => {
+      try {
+        const { webviewId, providerId, file } = data
+        const script = getFileUploadScript(providerId, file)
+        const result = await this.executeInWebViewContainer(webviewId, script)
+        return { success: true, providerId }
+      } catch (error) {
+        return {
+          success: false,
+          providerId: data.providerId,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
+      }
+    })
+
+    // 清除指定provider的存储数据
     ipcMain.handle('clear-provider-storage', async(event, providerId: string) => {
       try {
         console.log(`[IPCHandler] Clearing storage for provider: ${providerId}`)
@@ -820,21 +888,74 @@ export class IPCHandler extends EventEmitter {
     return { exists, active }
   }
 
+  private getStorageDir(): string {
+    const dir = join(app.getPath('userData'), 'app-storage')
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true })
+    }
+    return dir
+  }
+
+  private async executeInWebViewContainer(webviewId: string, script: string): Promise<any> {
+    const mainWindow = this.windowManager.getMainWindow()
+    if (!mainWindow) throw new Error('Main window not found')
+
+    const views = mainWindow.contentView?.children || []
+    let targetWebContents: Electron.WebContents | null = null
+
+    for (const view of views) {
+      const wc = view instanceof BrowserView ? view.webContents
+        : view instanceof WebContentsView ? view.webContents
+        : null
+      if (wc) {
+        try {
+          const elementId = await wc.executeJavaScript(
+            `document.querySelector('[data-webview-id="${webviewId}"]')?.id || document.querySelector('webview')?.id || ''`
+          )
+          if (elementId) {
+            targetWebContents = wc
+            break
+          }
+        } catch {
+          // Not this view
+        }
+      }
+    }
+
+    if (!targetWebContents) {
+      for (const view of views) {
+        const wc = view instanceof BrowserView ? view.webContents
+          : view instanceof WebContentsView ? view.webContents
+          : null
+        if (wc) {
+          try {
+            const result = await wc.executeJavaScript(script)
+            return result
+          } catch {
+            continue
+          }
+        }
+      }
+      throw new Error(`WebView ${webviewId} not found`)
+    }
+
+    return await targetWebContents.executeJavaScript(script)
+  }
+
   /**
    * 处理存储获取
    */
   private async handleStorageGet(data: StorageRequest): Promise<StorageResponse> {
     try {
-      // 实现存储获取逻辑
-      return {
-        value: null,
-        success: true
+      const namespace = data.namespace || 'default'
+      const filePath = join(this.getStorageDir(), `${namespace}.json`)
+      if (!existsSync(filePath)) {
+        return { value: null, success: true }
       }
+      const all = JSON.parse(readFileSync(filePath, 'utf-8'))
+      return { value: data.key ? all[data.key] : all, success: true }
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      }
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
     }
   }
 
@@ -843,15 +964,19 @@ export class IPCHandler extends EventEmitter {
    */
   private async handleStorageSet(data: StorageRequest): Promise<StorageResponse> {
     try {
-      // 实现存储设置逻辑
-      return {
-        success: true
+      const namespace = data.namespace || 'default'
+      const filePath = join(this.getStorageDir(), `${namespace}.json`)
+      let all: Record<string, any> = {}
+      if (existsSync(filePath)) {
+        all = JSON.parse(readFileSync(filePath, 'utf-8'))
       }
+      if (data.key) {
+        all[data.key] = data.value
+      }
+      writeFileSync(filePath, JSON.stringify(all, null, 2), 'utf-8')
+      return { success: true }
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      }
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
     }
   }
 
@@ -860,15 +985,21 @@ export class IPCHandler extends EventEmitter {
    */
   private async handleStorageDelete(data: StorageRequest): Promise<StorageResponse> {
     try {
-      // 实现存储删除逻辑
-      return {
-        success: true
+      const namespace = data.namespace || 'default'
+      const filePath = join(this.getStorageDir(), `${namespace}.json`)
+      if (!existsSync(filePath)) {
+        return { success: true }
       }
+      if (data.key) {
+        const all = JSON.parse(readFileSync(filePath, 'utf-8'))
+        delete all[data.key]
+        writeFileSync(filePath, JSON.stringify(all, null, 2), 'utf-8')
+      } else {
+        unlinkSync(filePath)
+      }
+      return { success: true }
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      }
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
     }
   }
 
@@ -877,15 +1008,19 @@ export class IPCHandler extends EventEmitter {
    */
   private async handleStorageClear(data: { namespace?: string }): Promise<StorageResponse> {
     try {
-      // 实现存储清除逻辑
-      return {
-        success: true
+      const storageDir = this.getStorageDir()
+      if (data.namespace) {
+        const filePath = join(storageDir, `${data.namespace}.json`)
+        if (existsSync(filePath)) unlinkSync(filePath)
+      } else {
+        const files = readdirSync(storageDir)
+        for (const f of files) {
+          if (f.endsWith('.json')) unlinkSync(join(storageDir, f))
+        }
       }
+      return { success: true }
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      }
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
     }
   }
 
@@ -1158,20 +1293,13 @@ export class IPCHandler extends EventEmitter {
     return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
   }
 
-  /**
-   * 日志记录
-   */
   private log(message: string, data?: any): void {
     if (this.config.enableLogging) {
       console.log(`[IPCHandler] ${message}`, data || '')
     }
   }
 
-  /**
-   * 销毁IPC处理器
-   */
   destroy(): void {
-    // 移除新的IPC处理器
     ipcMain.removeHandler('get-app-version')
     ipcMain.removeHandler('get-system-info')
     ipcMain.removeHandler('minimize-window')
@@ -1183,29 +1311,51 @@ export class IPCHandler extends EventEmitter {
     ipcMain.removeHandler('refresh-webview')
     ipcMain.removeHandler('refresh-all-webviews')
     ipcMain.removeHandler('load-webview')
-
-    // 移除所有IPC监听器
+    ipcMain.removeHandler('open-file-dialog')
+    ipcMain.removeHandler('file:read')
+    ipcMain.removeHandler('file:upload-to-webview')
     this.invokeHandlers.forEach((_, channel) => {
       ipcMain.removeHandler(channel)
     })
-
     this.messageHandlers.forEach((_, channel) => {
       ipcMain.removeAllListeners(channel)
     })
-
-    // 清理请求映射
     this.requestMap.forEach(({ timeout }) => {
       clearTimeout(timeout)
     })
     this.requestMap.clear()
-
-    // 清理处理器映射
     this.invokeHandlers.clear()
     this.messageHandlers.clear()
-
-    // 移除所有事件监听器
     this.removeAllListeners()
-
     this.log('IPC handler destroyed')
   }
+}
+
+const MIME_MAP: Record<string, string> = {
+  '.txt': 'text/plain', '.md': 'text/markdown', '.csv': 'text/csv',
+  '.json': 'application/json', '.xml': 'text/xml', '.html': 'text/html',
+  '.js': 'text/javascript', '.ts': 'text/typescript', '.jsx': 'text/javascript',
+  '.tsx': 'text/typescript', '.css': 'text/css', '.scss': 'text/x-scss',
+  '.py': 'text/x-python', '.java': 'text/x-java-source', '.c': 'text/x-c',
+  '.cpp': 'text/x-c++src', '.h': 'text/x-chdr', '.go': 'text/x-go',
+  '.rs': 'text/x-rust', '.rb': 'text/x-ruby', '.php': 'text/x-php',
+  '.sh': 'text/x-shellscript', '.bat': 'text/x-bat', '.ps1': 'text/x-powershell',
+  '.sql': 'text/x-sql', '.yaml': 'text/yaml', '.yml': 'text/yaml',
+  '.toml': 'text/x-toml', '.ini': 'text/x-ini', '.env': 'text/plain',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif', '.svg': 'image/svg+xml', '.webp': 'image/webp',
+  '.ico': 'image/x-icon', '.bmp': 'image/bmp',
+  '.pdf': 'application/pdf', '.doc': 'application/msword',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xls': 'application/vnd.ms-excel',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.ppt': 'application/vnd.ms-powerpoint',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.zip': 'application/zip', '.tar': 'application/x-tar',
+  '.gz': 'application/gzip', '.rar': 'application/x-rar-compressed',
+  '.7z': 'application/x-7z-compressed'
+}
+
+function getMimeType(ext: string): string {
+  return MIME_MAP[ext] || 'application/octet-stream'
 }

@@ -65,7 +65,12 @@ export enum IPCChannel {
   AI_STATUS_START_MONITORING = 'ai-status:start-monitoring',
   AI_STATUS_STOP_MONITORING = 'ai-status:stop-monitoring',
   AI_STATUS_GET_CURRENT = 'ai-status:get-current',
-  AI_STATUS_CHANGE = 'ai-status:change'
+  AI_STATUS_CHANGE = 'ai-status:change',
+
+  // 文件操作
+  FILE_OPEN_DIALOG = 'file:open-dialog',
+  FILE_READ = 'file:read',
+  FILE_UPLOAD_TO_WEBVIEW = 'file:upload-to-webview'
 }
 
 /**
@@ -386,4 +391,49 @@ export interface IPCEventDataMap {
   [IPCChannel.AI_STATUS_STOP_MONITORING]: { providerId: string }
   [IPCChannel.AI_STATUS_GET_CURRENT]: { providerId: string }
   [IPCChannel.AI_STATUS_CHANGE]: AIStatusChangeEvent
+
+  [IPCChannel.FILE_OPEN_DIALOG]: FileOpenDialogRequest
+  [IPCChannel.FILE_READ]: FileReadRequest
+  [IPCChannel.FILE_UPLOAD_TO_WEBVIEW]: FileUploadToWebViewRequest
+}
+
+export interface FileOpenDialogRequest {
+  multiSelections?: boolean
+  filters?: Array<{ name: string; extensions: string[] }>
+}
+
+export interface FileOpenDialogResponse {
+  canceled: boolean
+  filePaths: string[]
+}
+
+export interface FileReadRequest {
+  filePath: string
+}
+
+export interface FileReadResponse {
+  success: boolean
+  name: string
+  size: number
+  mimeType: string
+  base64: string
+  error?: string
+}
+
+export interface UploadFileData {
+  name: string
+  mimeType: string
+  base64: string
+}
+
+export interface FileUploadToWebViewRequest {
+  webviewId: string
+  providerId: string
+  file: UploadFileData
+}
+
+export interface FileUploadToWebViewResponse {
+  success: boolean
+  providerId: string
+  error?: string
 }

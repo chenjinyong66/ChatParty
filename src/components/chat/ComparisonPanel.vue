@@ -120,9 +120,30 @@
                 {{ resp.content.substring(0, 80) }}...
               </td>
             </tr>
+            <tr>
+              <td class="col-dimension">完整回答</td>
+              <td v-for="resp in responses" :key="resp.providerId" class="full-content-cell">
+                <div class="full-content-scroll" v-html="renderMarkdown(resp.content)" />
+                <el-button size="small" text type="primary" @click="openFullContent(resp)">
+                  放大查看
+                </el-button>
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
+
+      <!-- 完整内容弹窗 -->
+      <el-dialog
+        v-model="fullContentVisible"
+        :title="fullContentTitle"
+        width="80%"
+        top="5vh"
+        destroy-on-close
+        append-to-body
+      >
+        <div class="full-content-dialog-body" v-html="fullContentHtml" />
+      </el-dialog>
 
       <!-- 差异视图 -->
       <div v-if="viewMode === 'diff'" class="diff-view">
@@ -199,6 +220,9 @@ const lastQuery = ref('')
 const viewMode = ref<'card' | 'table' | 'diff'>('card')
 const diffLeft = ref('')
 const diffRight = ref('')
+const fullContentVisible = ref(false)
+const fullContentTitle = ref('')
+const fullContentHtml = ref('')
 
 const loggedInProviders = computed(() =>
   chatStore.providers.filter(p => p.isLoggedIn)
@@ -221,6 +245,12 @@ const getContent = (id: string) => responses.value.find(r => r.providerId === id
 const handleIconError = (e: Event) => {
   const img = e.target as HTMLImageElement
   img.style.display = 'none'
+}
+
+const openFullContent = (resp: any) => {
+  fullContentTitle.value = `${resp.providerName} - 完整回答`
+  fullContentHtml.value = renderMarkdown(resp.content)
+  fullContentVisible.value = true
 }
 
 /** 复制内容到剪贴板 */
@@ -580,6 +610,68 @@ const handleClear = () => {
   font-size: 11px;
   color: var(--el-text-color-secondary);
   max-width: 200px;
+}
+
+.full-content-cell {
+  vertical-align: top;
+}
+
+.full-content-scroll {
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 6px;
+  background: var(--el-bg-color-page);
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+.full-content-scroll :deep(pre) {
+  margin: 4px 0;
+  padding: 8px;
+  background: var(--el-bg-color);
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 12px;
+}
+
+.full-content-scroll :deep(code) {
+  font-size: 12px;
+}
+
+.full-content-scroll :deep(p) {
+  margin: 4px 0;
+}
+
+.full-content-dialog-body {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 16px;
+  line-height: 1.8;
+}
+
+.full-content-dialog-body :deep(pre) {
+  margin: 8px 0;
+  padding: 12px;
+  background: var(--el-bg-color-page);
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.full-content-dialog-body :deep(code) {
+  font-size: 13px;
+}
+
+.full-content-dialog-body :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.full-content-dialog-body :deep(th),
+.full-content-dialog-body :deep(td) {
+  border: 1px solid var(--el-border-color);
+  padding: 6px 10px;
 }
 
 .resp-icon-sm {

@@ -75,6 +75,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 清除指定provider的存储数据（用于解决Gemini登录问题）
   clearProviderStorage: (providerId: string) => ipcRenderer.invoke('clear-provider-storage', providerId),
 
+  // 文件操作
+  openFileDialog: (data?: any) => ipcRenderer.invoke('open-file-dialog', data),
+  readFile: (data: any) => ipcRenderer.invoke('file:read', data),
+  uploadFileToWebView: (data: any) => ipcRenderer.invoke('file:upload-to-webview', data),
+
   // 事件监听
   onAIStatusChange: (callback: (data: any) => void) => {
     const handler = (event: Electron.IpcRendererEvent, data: any) => callback(data)
@@ -177,6 +182,15 @@ declare global {
 
       // 清除指定provider的存储数据（用于解决Gemini登录问题）
       clearProviderStorage: (providerId: string) => Promise<{ success: boolean; error?: string }>
+
+      // 文件操作
+      openFileDialog: (data?: any) => Promise<{ canceled: boolean; filePaths: string[] }>
+      readFile: (data: { filePath: string }) => Promise<{
+        success: boolean; name: string; size: number; mimeType: string; base64: string; error?: string
+      }>
+      uploadFileToWebView: (data: {
+        webviewId: string; providerId: string; file: { name: string; mimeType: string; base64: string }
+      }) => Promise<{ success: boolean; providerId: string; error?: string }>
 
       // 事件监听
       onMessageReceived: (callback: (data: any) => void) => void

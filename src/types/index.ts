@@ -44,6 +44,14 @@ export interface Message {
 /**
  * AI提供商接口
  */
+export interface CustomProviderConfig {
+  loginCheckScript: string
+  sendMessageScript: string
+  newChatScript: string
+  statusMonitorScript: string
+  fileUploadScript: string
+}
+
 export interface AIProvider {
   id: string
   name: string
@@ -57,6 +65,8 @@ export interface AIProvider {
   lastError?: string
   retryCount?: number
   lastActiveTime?: Date
+  isCustom?: boolean
+  customConfig?: CustomProviderConfig
 }
 
 /**
@@ -150,7 +160,7 @@ export interface LayoutConfig {
  */
 export interface UserPreferences {
   theme: 'light' | 'dark' | 'auto'
-  language: 'zh-CN' | 'en-US'
+  language: 'zh-CN'
   autoSave: boolean
   notifications: boolean
   shortcuts: Record<string, string>

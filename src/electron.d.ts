@@ -30,6 +30,15 @@ interface ElectronAPI {
   // 其他功能
   openExternal(url: string): Promise<void>
 
+  // 文件操作
+  openFileDialog(data?: any): Promise<{ canceled: boolean; filePaths: string[] }>
+  readFile(data: { filePath: string }): Promise<{
+    success: boolean; name: string; size: number; mimeType: string; base64: string; error?: string
+  }>
+  uploadFileToWebView(data: {
+    webviewId: string; providerId: string; file: { name: string; mimeType: string; base64: string }
+  }): Promise<{ success: boolean; providerId: string; error?: string }>
+
   // AI状态监控
   startAIStatusMonitoring(data: { webviewId: string; providerId: string }): Promise<{ success: boolean; error?: string }>
   stopAIStatusMonitoring(data: { providerId: string }): Promise<{ success: boolean; error?: string }>

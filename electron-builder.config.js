@@ -2,7 +2,8 @@ module.exports = {
   appId: 'com.chatallai.app',
   productName: 'ChatParty',
   directories: {
-    output: 'dist'
+    output: 'dist',
+    buildResources: 'build'
   },
   files: [
     'dist-electron/**/*',
@@ -38,8 +39,13 @@ module.exports = {
         ]
       }
     ],
-    icon: 'public/icons/chatparty-icon.png',
-    // 移除不必要的框架和组件
+    icon: 'build/icon.png',
+    gatekeeperAssess: false,
+    type: 'distribution',
+    hardenedRuntime: true,
+    entitlements: 'build/entitlements.mac.plist',
+    entitlementsInherit: 'build/entitlements.mac.plist',
+    notarize: false,
     ignore: [
       '**/Electron Framework.framework/Versions/A/Helpers/**',
       '**/Electron Framework.framework/Versions/A/Resources/**',
@@ -59,16 +65,14 @@ module.exports = {
         ]
       }
     ],
-    icon: 'public/icons/chatparty-icon.png'
+    icon: 'build/icon.png'
   },
   nsis: {
     oneClick: false,
     allowToChangeInstallationDirectory: true
   },
   compression: 'maximum',
-  // 移除调试信息
   removePackageScripts: true,
-  // 最小化文件
   asar: {
     smartUnpack: false
   }

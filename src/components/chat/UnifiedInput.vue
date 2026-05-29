@@ -6,7 +6,7 @@
         <el-icon :size="16">
           <ArrowDown />
         </el-icon>
-        <span class="expand-label">展开对话</span>
+        <span class="expand-label">展开输入框</span>
       </div>
     </transition>
 
@@ -59,9 +59,36 @@
                 <el-icon v-if="provider.loadingState === 'loading'" class="loading-icon">
                   <Loading />
                 </el-icon>
+                <span v-if="provider.isCustom" class="custom-remove" title="移除自定义网站"
+                  @click.stop.prevent="handleRemoveCustomProvider(provider.id)">
+                  <el-icon :size="12">
+                    <Close />
+                  </el-icon>
+                </span>
               </div>
             </el-checkbox>
+            <div class="add-provider-btn" @click="showAddProviderDialog">
+              <el-icon :size="14">
+                <Plus />
+              </el-icon>
+              <span>添加网站</span>
+            </div>
           </el-checkbox-group>
+
+          <el-dialog v-model="addProviderDialogVisible" title="添加自定义网站" width="400px" destroy-on-close append-to-body>
+            <el-form :model="addProviderForm" label-width="60px">
+              <el-form-item label="名称" required>
+                <el-input v-model="addProviderForm.name" placeholder="如：MyGPT" />
+              </el-form-item>
+              <el-form-item label="网址" required>
+                <el-input v-model="addProviderForm.url" placeholder="https://example.com" />
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="addProviderDialogVisible = false">取消</el-button>
+              <el-button type="primary" @click="handleAddProvider">添加</el-button>
+            </template>
+          </el-dialog>
         </div>
 
         <div class="input-content">
@@ -76,6 +103,13 @@
             </div>
           </div>
 
+          <div v-if="attachedFiles.length > 0" class="attached-files">
+            <el-tag v-for="(file, index) in attachedFiles" :key="index" closable size="small"
+              :type="file.isText ? 'info' : 'warning'" @close="removeFile(index)">
+              {{ file.name }} ({{ formatFileSize(file.size) }})
+            </el-tag>
+          </div>
+
           <div class="input-actions">
             <div class="actions-left">
               <div class="action-group action-group-util">
@@ -83,6 +117,12 @@
                   @click="handleRefresh">
                   刷新连接
                 </el-button>
+                <el-button :icon="UploadFilled" size="small" :disabled="loggedInCount === 0 || hasSendingMessages"
+                  title="发送文件到已登录的AI" @click="triggerFileSelect">
+                  发送文件
+                </el-button>
+                <input ref="fileInputRef" type="file" multiple style="display:none" :accept="ACCEPTED_EXTENSIONS"
+                  @change="handleFileInputChange">
                 <el-button :icon="Delete" size="small" :disabled="!currentMessage" data-testid="clear-button"
                   @click="handleClear">
                   清空
@@ -132,9 +172,9 @@ import {
   computed, onMounted, onUnmounted, ref, nextTick
 } from 'vue'
 import {
-  EditPen, Position, Refresh, Delete, Select, Loading, Plus, Minus, Document, Rank, Lightning, DocumentChecked, ArrowUp, ArrowDown, ChatLineRound, ScaleToOriginal, SetUp
+  EditPen, Position, Refresh, Delete, Select, Loading, Plus, Minus, Document, Rank, Lightning, DocumentChecked, ArrowUp, ArrowDown, ChatLineRound, ScaleToOriginal, SetUp, UploadFilled, Close
 } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useChatStore } from '../../stores'
 import { useAgentStore } from '../../stores/agent'
 import AgentSelector from './AgentSelector.vue'
@@ -689,17 +729,21 @@ const handleSend = async (): Promise<void> => {
   }
 
   try {
-    // 收起输入框
     if (!isCollapsed.value) {
       isCollapsed.value = true
     }
 
-    // 获取已登录的提供商
     const { loggedInProviders } = chatStore
+
+    if (attachedFiles.value.length > 0) {
+      appendFileContentToMessage()
+      sendBinaryFilesToWebViews()
+    }
+
     const messageContent = currentMessage.value
 
-    // 清空输入框（提前清空，避免重复发送）
     chatStore.clearCurrentMessage()
+    attachedFiles.value = []
 
     // 使用消息分发器发送消息
     const results = await messageDispatcher.sendMessage(messageContent, loggedInProviders)
@@ -769,10 +813,7 @@ const triggerAutoReviewIfNeeded = (messageContent: string, providers: AIProvider
  */
 const handleRefresh = async (): Promise<void> => {
   try {
-    // 重置消息分发器状态
     messageDispatcher.resetAllStatus()
-
-    // 刷新所有WebView的连接状态
     if (window.electronAPI) {
       await window.electronAPI.refreshAllWebViews()
       ElMessage.success('连接状态已刷新')
@@ -780,6 +821,162 @@ const handleRefresh = async (): Promise<void> => {
   } catch (error) {
     console.error('Failed to refresh connections:', error)
     ElMessage.error('刷新连接失败')
+  }
+}
+
+interface AttachedFile {
+  name: string
+  size: number
+  mimeType: string
+  base64: string
+  isText: boolean
+}
+
+const attachedFiles = ref<AttachedFile[]>([])
+
+const TEXT_MIME_PREFIXES = ['text/', 'application/json', 'application/xml', 'application/javascript']
+
+const isTextMimeType = (mimeType: string): boolean => {
+  return TEXT_MIME_PREFIXES.some(prefix => mimeType.startsWith(prefix))
+}
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+const triggerFileSelect = async (): Promise<void> => {
+  if (!window.electronAPI) return
+
+  try {
+    const result = await window.electronAPI.openFileDialog({ multiSelections: true })
+    if (!result || result.canceled || !result.filePaths || result.filePaths.length === 0) return
+
+    for (const filePath of result.filePaths) {
+      const fileResult = await window.electronAPI.readFile({ filePath })
+      if (!fileResult.success) continue
+
+      const exists = attachedFiles.value.some(f => f.name === fileResult.name)
+      if (exists) continue
+
+      attachedFiles.value.push({
+        name: fileResult.name,
+        size: fileResult.size,
+        mimeType: fileResult.mimeType,
+        base64: fileResult.base64,
+        isText: isTextMimeType(fileResult.mimeType)
+      })
+    }
+  } catch (error) {
+    console.error('File select error:', error)
+    ElMessage.error('选择文件失败')
+  }
+}
+
+const removeFile = (index: number): void => {
+  attachedFiles.value.splice(index, 1)
+}
+
+const appendFileContentToMessage = (): void => {
+  const textFiles = attachedFiles.value.filter(f => f.isText && f.size < 50 * 1024)
+  textFiles.forEach(file => {
+    try {
+      const bytes = Uint8Array.from(atob(file.base64), c => c.charCodeAt(0))
+      const decoded = new TextDecoder('utf-8').decode(bytes)
+      chatStore.currentMessage += `\n\n\`\`\`${getLangFromMime(file.mimeType)}:${file.name}\n${decoded}\n\`\`\``
+    } catch {
+      chatStore.currentMessage += `\n\n[附件: ${file.name} (${formatFileSize(file.size)})]`
+    }
+  })
+}
+
+const getLangFromMime = (mimeType: string): string => {
+  const map: Record<string, string> = {
+    'text/javascript': 'javascript', 'text/typescript': 'typescript',
+    'application/json': 'json', 'text/xml': 'xml', 'text/html': 'html',
+    'text/css': 'css', 'text/x-python': 'python', 'text/x-java-source': 'java',
+    'text/x-c': 'c', 'text/x-c++src': 'cpp', 'text/x-go': 'go',
+    'text/x-rust': 'rust', 'text/x-ruby': 'ruby', 'text/x-php': 'php',
+    'text/x-shellscript': 'bash', 'text/x-sql': 'sql', 'text/yaml': 'yaml'
+  }
+  return map[mimeType] || ''
+}
+
+const sendBinaryFilesToWebViews = async (): Promise<void> => {
+  const filesToSend = attachedFiles.value
+  const loggedIn = chatStore.loggedInProviders
+
+  if (filesToSend.length === 0 || loggedIn.length === 0) return
+
+  const { getFileUploadScript } = await import('../../utils/UploadScripts')
+  let successCount = 0
+  let failCount = 0
+
+  for (const provider of loggedIn) {
+    for (const file of filesToSend) {
+      try {
+        const script = getFileUploadScript(provider.id, {
+          name: file.name,
+          mimeType: file.mimeType,
+          base64: file.base64
+        })
+        await window.electronAPI.executeScriptInWebView(provider.webviewId, script)
+        successCount++
+      } catch (error) {
+        console.error(`Upload ${file.name} to ${provider.name} failed:`, error)
+        failCount++
+      }
+    }
+  }
+
+  if (successCount > 0) {
+    ElMessage.success(`${successCount} 个文件已发送到各AI${failCount > 0 ? `，${failCount} 个失败` : ''}`)
+  } else if (failCount > 0) {
+    ElMessage.warning('文件发送失败，请检查网站是否支持文件上传')
+  }
+}
+
+const handleFileUpload = async (): Promise<void> => {
+  await triggerFileSelect()
+}
+
+const addProviderDialogVisible = ref(false)
+const addProviderForm = ref({ name: '', url: '' })
+
+const showAddProviderDialog = () => {
+  addProviderForm.value = { name: '', url: '' }
+  addProviderDialogVisible.value = true
+}
+
+const handleAddProvider = () => {
+  if (!addProviderForm.value.name.trim()) {
+    ElMessage.warning('请输入网站名称')
+    return
+  }
+  if (!addProviderForm.value.url.trim()) {
+    ElMessage.warning('请输入网站网址')
+    return
+  }
+  chatStore.addCustomProvider({
+    name: addProviderForm.value.name.trim(),
+    url: addProviderForm.value.url.trim()
+  })
+  addProviderDialogVisible.value = false
+  ElMessage.success('网站已添加')
+}
+
+const handleRemoveCustomProvider = async (providerId: string) => {
+  try {
+    await ElMessageBox.confirm('确定移除该自定义网站？', '确认移除', {
+      confirmButtonText: '移除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    chatStore.removeCustomProvider(providerId)
+    ElMessage.success('已移除')
+  } catch {
+    // cancelled
   }
 }
 
@@ -1294,6 +1491,49 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
+.custom-remove {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--el-color-danger);
+  color: #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 1;
+}
+
+.provider-option:hover .custom-remove {
+  opacity: 1;
+}
+
+.add-provider-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1.5px dashed var(--el-border-color);
+  border-radius: 16px;
+  cursor: pointer;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.add-provider-btn:hover {
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+
 .drag-handle {
   cursor: grab;
   color: #999;
@@ -1470,6 +1710,16 @@ onUnmounted(() => {
   position: relative;
   width: 100%;
   transition: all 0.3s ease;
+}
+
+.attached-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--el-bg-color-page);
+  border-radius: 4px;
+  margin-top: 4px;
 }
 
 .message-input {

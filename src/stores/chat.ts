@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { AIProvider, Message, Session } from '../types'
+import type { AIProvider, Message, Session, CustomProviderConfig } from '../types'
 
 /**
  * 聊天状态管理
@@ -318,6 +318,7 @@ export const useChatStore = defineStore('chat', () => {
    * 初始化对话历史
    */
   const initializeConversations = (): void => {
+    loadCustomProviders()
     providers.value.forEach((provider) => {
       if (!conversations.value[provider.id]) {
         conversations.value[provider.id] = []
@@ -468,6 +469,129 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  const customProviders = computed(() => providers.value.filter((p) => p.isCustom))
+  const builtInProviders = computed(() => providers.value.filter((p) => !p.isCustom))
+
+  const addCustomProvider = (config: {
+    name: string
+    url: string
+    icon?: string
+    customConfig?: Partial<CustomProviderConfig>
+  }): AIProvider => {
+    const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const defaultCustomConfig: CustomProviderConfig = {
+      loginCheckScript: 'false',
+      sendMessageScript: '',
+      newChatScript: '',
+      statusMonitorScript: '',
+      fileUploadScript: ''
+    }
+    const provider: AIProvider = {
+      id,
+      name: config.name,
+      url: config.url,
+      icon: config.icon || './icons/default.svg',
+      isLoggedIn: false,
+      sessionData: {
+        cookies: [],
+        localStorage: {},
+        sessionStorage: {},
+        isActive: false,
+        lastActiveTime: new Date()
+      },
+      webviewId: `webview-${id}`,
+      isEnabled: false,
+      loadingState: 'idle',
+      retryCount: 0,
+      isCustom: true,
+      customConfig: { ...defaultCustomConfig, ...config.customConfig }
+    }
+    providers.value.push(provider)
+    saveCustomProviders()
+    return provider
+  }
+
+  const removeCustomProvider = (providerId: string): boolean => {
+    const index = providers.value.findIndex((p) => p.id === providerId && p.isCustom)
+    if (index === -1) return false
+    providers.value.splice(index, 1)
+    selectedProviders.value = selectedProviders.value.filter((id) => id !== providerId)
+    saveSelectedProviders()
+    saveCustomProviders()
+    return true
+  }
+
+  const updateCustomProvider = (providerId: string, updates: Partial<Pick<AIProvider, 'name' | 'url' | 'icon'>> & { customConfig?: Partial<CustomProviderConfig> }): boolean => {
+    const provider = providers.value.find((p) => p.id === providerId && p.isCustom)
+    if (!provider) return false
+    if (updates.name) provider.name = updates.name
+    if (updates.url) provider.url = updates.url
+    if (updates.icon) provider.icon = updates.icon
+    if (updates.customConfig && provider.customConfig) {
+      provider.customConfig = { ...provider.customConfig, ...updates.customConfig }
+    }
+    saveCustomProviders()
+    return true
+  }
+
+  const saveCustomProviders = (): void => {
+    try {
+      const customList = customProviders.value.map((p) => ({
+        id: p.id,
+        name: p.name,
+        url: p.url,
+        icon: p.icon,
+        isCustom: p.isCustom,
+        customConfig: p.customConfig
+      }))
+      localStorage.setItem('custom-providers', JSON.stringify(customList))
+    } catch (error) {
+      console.error('Failed to save custom providers:', error)
+    }
+  }
+
+  const loadCustomProviders = (): void => {
+    try {
+      const stored = localStorage.getItem('custom-providers')
+      if (!stored) return
+      const customList = JSON.parse(stored) as Array<{
+        id: string
+        name: string
+        url: string
+        icon: string
+        isCustom: boolean
+        customConfig: CustomProviderConfig
+      }>
+      const existingIds = new Set(providers.value.map((p) => p.id))
+      for (const item of customList) {
+        if (existingIds.has(item.id)) continue
+        const provider: AIProvider = {
+          id: item.id,
+          name: item.name,
+          url: item.url,
+          icon: item.icon || './icons/default.svg',
+          isLoggedIn: false,
+          sessionData: {
+            cookies: [],
+            localStorage: {},
+            sessionStorage: {},
+            isActive: false,
+            lastActiveTime: new Date()
+          },
+          webviewId: `webview-${item.id}`,
+          isEnabled: false,
+          loadingState: 'idle',
+          retryCount: 0,
+          isCustom: true,
+          customConfig: item.customConfig
+        }
+        providers.value.push(provider)
+      }
+    } catch (error) {
+      console.error('Failed to load custom providers:', error)
+    }
+  }
+
   return {
     providers,
     currentMessage,
@@ -478,6 +602,8 @@ export const useChatStore = defineStore('chat', () => {
     loggedInProviders,
     totalProviders,
     loggedInCount,
+    customProviders,
+    builtInProviders,
     initializeConversations,
     addMessage,
     updateProviderLoginStatus,
@@ -496,6 +622,11 @@ export const useChatStore = defineStore('chat', () => {
     updateProviderError,
     toggleProvider,
     resetProviderState,
-    updateProviderActiveTime
+    updateProviderActiveTime,
+    addCustomProvider,
+    removeCustomProvider,
+    updateCustomProvider,
+    saveCustomProviders,
+    loadCustomProviders
   }
 })

@@ -13,6 +13,7 @@
  * @returns 对应的JavaScript脚本字符串
  */
 import { useScriptConfigStore } from '../stores/scriptConfig'
+import { useChatStore } from '../stores'
 import type { ScriptType } from '../types'
 
 function resolveScript(
@@ -96,5 +97,17 @@ export function getLoginCheckScript(providerId: string): string {
     `
   }
 
-  return resolveScript(providerId, 'loginCheck', scripts[providerId] || 'false')
+  const defaultScript = scripts[providerId] || 'false'
+
+  try {
+    const chatStore = useChatStore()
+    const provider = chatStore.getProvider(providerId)
+    if (provider?.isCustom && provider.customConfig?.loginCheckScript) {
+      return resolveScript(providerId, 'loginCheck', provider.customConfig.loginCheckScript)
+    }
+  } catch {
+    // Store not available
+  }
+
+  return resolveScript(providerId, 'loginCheck', defaultScript)
 }
