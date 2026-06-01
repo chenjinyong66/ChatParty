@@ -123,7 +123,7 @@
                   title="发送文件到已登录的AI" @click="triggerFileSelect">
                   发送文件
                 </el-button>
-                <input ref="fileInputRef" type="file" multiple style="display:none" :accept="ACCEPTED_EXTENSIONS"
+                <input ref="fileInputRef" type="file" multiple style="display:none" accept=".pdf,.doc,.docx,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.gif,.webp,.svg"
                   @change="handleFileInputChange">
                 <el-button :icon="Delete" size="small" :disabled="!currentMessage" data-testid="clear-button"
                   @click="handleClear">
