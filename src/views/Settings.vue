@@ -113,15 +113,14 @@
                     <el-tag size="small" type="success">推荐</el-tag>
                   </div>
                   <p class="recommend-desc">
-                    一款基于 Tauri v2 + Rust 开发的轻量级跨平台护眼提醒桌面应用，专为办公人群、程序员设计。核心功能涵盖智能护眼休息提醒、喝水提醒，搭配 AI
-                    个性化提醒文案、眼睛生命值系统、宠物养成互动等特色功能，支持
-                    Windows/macOS/Linux 三大系统，兼顾实用性与趣味性。
+                    开源 AI 智能健康桌面应用 (Tauri v2 + Rust)｜护眼休息提醒 · 喝水提醒 · 用药提醒｜眼睛生命值 · 宠物养成 · 20-20-20法则 · 久坐检测
                   </p>
                   <div class="copy-link-row">
-                    <el-link type="primary" href="https://github.com/guangshu100/eye-care" target="_blank">
+                    <el-link type="primary" href="https://github.com/guangshu100/EyeCare/releases" target="_blank">
                       了解更多 →
                     </el-link>
-                    <el-button size="small" text @click="copyToClipboard('https://github.com/guangshu100/eye-care')">
+                    <el-button size="small" text
+                      @click="copyToClipboard('https://github.com/guangshu100/EyeCare/releases')">
                       复制链接
                     </el-button>
                   </div>

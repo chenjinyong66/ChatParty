@@ -33,7 +33,9 @@
             <el-tag v-if="hasRespondingAI" type="warning" size="small" class="ai-status-tag">
               {{ respondingAICount }} 个AI回答中
             </el-tag>
-            <el-button :icon="ArrowUp" size="small" circle class="collapse-btn" title="收起输入框" @click="toggleCollapse" />
+            <el-button :icon="ArrowUp" size="small" class="collapse-btn" title="收起输入框" @click="toggleCollapse">
+              收起
+            </el-button>
           </div>
         </div>
 
@@ -1402,6 +1404,16 @@ onUnmounted(() => {
 /* 收起按钮 - 在输入框头部右侧 */
 .collapse-btn {
   margin-left: 8px;
+  background: var(--el-color-primary-light-7);
+  border-color: var(--el-color-primary-light-5);
+  color: var(--el-color-primary);
+  font-weight: 500;
+}
+
+.collapse-btn:hover {
+  background: var(--el-color-primary);
+  border-color: var(--el-color-primary);
+  color: #fff;
 }
 
 /* 淡入淡出动画 */

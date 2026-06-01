@@ -1,7 +1,7 @@
 {
   "name": "chat-party",
   "version": "1.1.1",
-  "description": "A desktop application to chat with multiple AI models simultaneously",
+  "description": "一个同时与多个AI模型对话的桌面应用程序",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "node scripts/dev.js",
@@ -31,7 +31,7 @@
     "ai",
     "chat"
   ],
-  "author": "ChatAllAI Team",
+  "author": "guangshu",
   "license": "MIT",
   "devDependencies": {
     "@types/jsdom": "^21.1.7",
@@ -64,5 +64,104 @@
     "pinia": "^2.1.7",
     "vue": "^3.3.11",
     "vue-router": "^4.2.5"
+  },
+  "build": {
+    "appId": "com.chatallai.app",
+    "productName": "ChatParty",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "electronDownload": {
+      "cache": "./electron-cache"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "dist/**/*",
+      "!node_modules/**/*",
+      "!tests/**/*",
+      "!docs/**/*",
+      "!examples/**/*",
+      "!.*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules/@element-plus/icons-vue/dist/**/*",
+        "to": "extra-resources/@element-plus/icons-vue",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "node_modules/element-plus/dist/**/*",
+        "to": "extra-resources/element-plus",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "node_modules/pinia/dist/**/*",
+        "to": "extra-resources/pinia",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "node_modules/vue/dist/**/*",
+        "to": "extra-resources/vue",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "node_modules/vue-router/dist/**/*",
+        "to": "extra-resources/vue-router",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "public/icons/chatparty-icon.png",
+      "gatekeeperAssess": false,
+      "type": "distribution",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": false
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/icons/chatparty-icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "compression": "normal",
+    "removePackageScripts": true,
+    "asar": {
+      "smartUnpack": false
+    }
   }
 }
+
+

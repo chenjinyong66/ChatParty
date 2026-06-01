@@ -11,10 +11,10 @@ export const useLayoutStore = defineStore('layout', () => {
 
   // 网格布局设置 - 移除行数限制
   const gridSettings = ref({
-    columns: 3,
+    columns: 2,
     gap: 16,
     minCardWidth: 300,
-    minCardHeight: 600 // 最小高度600px，提供更大显示空间
+    minCardHeight: 600
   })
 
   // 窗口尺寸
@@ -207,14 +207,6 @@ export const useLayoutStore = defineStore('layout', () => {
   const updateWindowSize = (width: number, height: number): void => {
     windowSize.value = { width, height }
 
-    // 根据窗口大小自动调整网格列数，但不覆盖用户手动设置
-    if (width < 800) {
-      gridSettings.value.columns = Math.min(gridSettings.value.columns, 1)
-    } else if (width < 1200) {
-      gridSettings.value.columns = Math.min(gridSettings.value.columns, 2)
-    }
-
-    // 重新计算卡片布局
     recalculateLayout()
   }
 
@@ -310,6 +302,9 @@ export const useLayoutStore = defineStore('layout', () => {
         }
         if (config.gridSettings) {
           gridSettings.value = { ...gridSettings.value, ...config.gridSettings }
+          if (gridSettings.value.columns < 2) {
+            gridSettings.value.columns = 2
+          }
         }
         console.log('成功加载布局配置:', config.gridSettings)
       } else {
