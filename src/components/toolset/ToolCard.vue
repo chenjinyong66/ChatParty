@@ -69,6 +69,15 @@
             :loading="isRefreshing"
             @click="refreshWebView"
         />
+        <el-button
+            v-if="isCustom"
+            :icon="Delete"
+            size="small"
+            circle
+            title="删除自定义网站"
+            class="remove-custom-btn"
+            @click="handleRemove"
+        />
       </div>
     </div>
 
@@ -250,7 +259,8 @@ import {
   Rank,
   FullScreen,
   Connection,
-  Monitor
+  Monitor,
+  Delete
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import WebView from '../webview/WebView.vue'
@@ -261,12 +271,24 @@ import { useToolsetStore, useLayoutStore } from '../../stores'
 interface Props {
   provider: AIProvider
   config?: CardConfig
+  isCustom?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  isCustom: false
+})
+
+const emit = defineEmits<{
+  'remove-custom': [providerId: string]
+}>()
 
 const chatStore = useToolsetStore()
 const layoutStore = useLayoutStore()
+
+// 触发删除自定义网站
+const handleRemove = () => {
+  emit('remove-custom', props.provider.id)
+}
 
 // 响应式数据
 const isRefreshing = ref(false)
@@ -846,6 +868,15 @@ onMounted(() => {
 .header-right {
   display: flex;
   gap: 4px;
+}
+
+.remove-custom-btn {
+  color: #f56c6c;
+}
+
+.remove-custom-btn:hover {
+  background: #f56c6c;
+  color: #fff;
 }
 
 .webview-container {

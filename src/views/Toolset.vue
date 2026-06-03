@@ -1,6 +1,21 @@
 <template>
   <div class="chat-view">
     <div class="chat-container">
+      <!-- 工具栏：添加/管理自定义网站 -->
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <span class="toolbar-title">工具集</span>
+          <el-tag v-if="chatStore.customProviders.length" type="success" size="small">
+            {{ chatStore.customProviders.length }} 个自定义
+          </el-tag>
+        </div>
+        <div class="toolbar-right">
+          <el-button type="primary" size="small" :icon="Plus" @click="showAddDialog">
+            添加自定义网站
+          </el-button>
+        </div>
+      </div>
+
       <!-- 统一输入区域 -->
       <div
           class="input-section"
@@ -27,22 +42,57 @@
           :style="gridStyle"
           :class="{ 'cards-grid-expanded': isInputCollapsed }"
       >
-        <ToolCard
+      <ToolCard
             v-for="provider in visibleProviders"
             :key="provider.id"
             :provider="provider"
             :config="getCardConfig(provider.id)"
+            :is-custom="!!provider.isCustom"
             class="card-item"
+            @remove-custom="handleRemoveCustom"
         />
       </div>
     </div>
+
+    <!-- 添加/编辑自定义网站对话框 -->
+    <el-dialog
+      v-model="dialogVisible"
+      :title="editingId ? '编辑自定义网站' : '添加自定义工具网站'"
+      width="500px"
+      :close-on-click-modal="false"
+    >
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
+        <el-form-item label="名称" prop="name">
+          <el-input v-model="form.name" placeholder="如：我的工具" maxlength="20" show-word-limit />
+        </el-form-item>
+        <el-form-item label="网址" prop="url">
+          <el-input v-model="form.url" placeholder="https://example.com" />
+        </el-form-item>
+        <el-form-item label="图标URL" prop="icon">
+          <el-input v-model="form.icon" placeholder="可选，默认使用通用图标" />
+        </el-form-item>
+        <el-form-item>
+          <el-alert type="info" :closable="false" show-icon>
+            <template #title>
+              <span style="font-size: 12px;">自定义网站将作为独立工具卡片显示在网格中，可正常启用/禁用</span>
+            </template>
+          </el-alert>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleSubmit">确认</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import {
-  computed, onMounted, onUnmounted, ref, watch
+  computed, onMounted, onUnmounted, reactive, ref, watch
 } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 import { useToolsetStore, useLayoutStore } from '../stores'
 import UnifiedInput from '../components/toolset/ToolsetInput.vue'
 import ToolCard from '../components/toolset/ToolCard.vue'
@@ -50,6 +100,94 @@ import ToolCard from '../components/toolset/ToolCard.vue'
 const chatStore = useToolsetStore()
 const layoutStore = useLayoutStore()
 const isInputCollapsed = ref(false)
+
+// 自定义网站对话框状态
+const dialogVisible = ref(false)
+const editingId = ref<string | null>(null)
+const formRef = ref()
+const form = reactive({
+  name: '',
+  url: '',
+  icon: ''
+})
+const rules = {
+  name: [{ required: true, message: '请输入网站名称', trigger: 'blur' }],
+  url: [
+    { required: true, message: '请输入网址', trigger: 'blur' },
+    {
+      pattern: /^https?:\/\/.+/,
+      message: '网址必须以 http:// 或 https:// 开头',
+      trigger: 'blur'
+    }
+  ]
+}
+
+/**
+ * 显示添加对话框
+ */
+const showAddDialog = () => {
+  editingId.value = null
+  form.name = ''
+  form.url = ''
+  form.icon = ''
+  dialogVisible.value = true
+}
+
+/**
+ * 提交表单
+ */
+const handleSubmit = async () => {
+  if (!formRef.value) return
+  try {
+    await formRef.value.validate()
+  } catch {
+    return
+  }
+
+  if (editingId.value) {
+    chatStore.updateCustomProvider(editingId.value, {
+      name: form.name,
+      url: form.url,
+      icon: form.icon || './icons/default.svg'
+    })
+    ElMessage.success('已更新')
+  } else {
+    chatStore.addCustomProvider({
+      name: form.name,
+      url: form.url,
+      icon: form.icon || './icons/default.svg'
+    })
+    ElMessage.success('已添加')
+  }
+  dialogVisible.value = false
+}
+
+/**
+ * 删除自定义网站
+ */
+const handleRemoveCustom = async (providerId: string) => {
+  const provider = chatStore.getProvider(providerId)
+  if (!provider) return
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除自定义工具网站「${provider.name}」吗？此操作无法撤销。`,
+      '删除确认',
+      {
+        type: 'warning',
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        confirmButtonClass: 'el-button--danger'
+      }
+    )
+    if (chatStore.removeCustomProvider(providerId)) {
+      ElMessage.success('已删除')
+    } else {
+      ElMessage.error('删除失败')
+    }
+  } catch {
+    // 用户取消
+  }
+}
 
 // 处理消息发送事件
 const handleMessageSent = () => {
@@ -171,6 +309,9 @@ const handleKeyDown = (event: KeyboardEvent) => {
 
 // 生命周期
 onMounted(() => {
+  // 加载自定义工具网站
+  chatStore.loadCustomProviders()
+
   // 初始化聊天数据
   chatStore.initializeConversations()
 
@@ -213,7 +354,6 @@ onMounted(() => {
 onUnmounted(() => {
   // 移除窗口大小变化监听器
   window.removeEventListener('resize', handleResize)
-
   // 移除键盘事件监听
   window.removeEventListener('keydown', handleKeyDown)
 })
@@ -236,6 +376,35 @@ onUnmounted(() => {
   height: 100%;
   overflow: hidden;
   position: relative;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 10px;
+  border: 1px solid #ebeef5;
+  flex-shrink: 0;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toolbar-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .input-section {
@@ -365,6 +534,10 @@ onUnmounted(() => {
 
   .btn-text {
     font-size: 11px;
+  }
+
+  .toolbar {
+    padding: 6px 10px;
   }
 }
 

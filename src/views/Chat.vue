@@ -200,13 +200,19 @@ const visibleProviders = computed(() => {
 const gridStyle = computed(() => {
   const { columns } = layoutStore.gridSettings
   const { gap } = layoutStore.gridSettings
+  const cardCount = visibleProviders.value.length
+  const rows = Math.max(1, Math.ceil(cardCount / columns))
 
   return {
     display: 'grid',
-    gridTemplateColumns: `repeat(${columns}, 1fr)`,
+    gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+    // 行高自适应：所有行平分可用高度，但每行至少 minCardHeight，否则纵向滚动
+    gridTemplateRows: `repeat(${rows}, minmax(${layoutStore.gridSettings.minCardHeight}px, 1fr))`,
     gap: `${gap}px`,
     padding: `${gap}px`,
-    alignItems: 'start' // 让卡片顶部对齐
+    alignItems: 'stretch', // 让卡片纵向拉伸填满网格行
+    height: '100%',
+    boxSizing: 'border-box'
   }
 })
 
@@ -303,9 +309,11 @@ onUnmounted(() => {
 
 <style scoped>
 .chat-view {
-  height: 100vh;
+  /* 关键修复：父容器 .main-content 已是 (100vh - header - footer)，这里应继承可用高度 */
+  height: 100%;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .chat-container {
@@ -318,26 +326,24 @@ onUnmounted(() => {
 }
 
 .input-section {
-  flex-shrink: 1;
+  flex-shrink: 0;
   min-height: 0;
   max-height: 45vh;
   overflow-y: auto;
 }
 
 .cards-grid {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;       /* 关键：允许 grid 在 flex 容器中正确收缩，避免外部出现空白 */
   overflow-y: auto;
   overflow-x: hidden;
-  min-height: 0; /* 允许flex子项收缩 */
-  max-height: calc(100vh - 120px); /* 确保有足够的高度用于滚动 */
 }
 
 .card-item {
   width: 100%;
-  max-width: 100%;
-  min-width: 300px; /* 最小宽度 */
-  height: 100%; /* 根据内容自适应高度 */
-  /* 确保卡片在网格中正确显示 */
+  height: 100%;        /* 跟随网格行高自适应 */
+  min-width: 0;        /* 配合 minmax(0,1fr) 防止子项撑破网格 */
+  min-height: 0;
   grid-column: auto;
   grid-row: auto;
 }

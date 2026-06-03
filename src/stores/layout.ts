@@ -38,7 +38,24 @@ export const useLayoutStore = defineStore('layout', () => {
     )
   })
 
-  const cardHeight = computed(() => Math.max(gridSettings.value.minCardHeight, 600)) // 确保卡片高度至少为400px
+  /**
+   * 卡片高度（响应式）
+   * - 根据当前可见卡片数自动算出行数
+   * - 用可用高度均分给每一行，保证默认布局填满屏幕
+   * - 不低于 minCardHeight
+   * 注意：视图层已改为 CSS Grid 1fr 自适应，此值仅作为持久化的"默认尺寸快照"使用。
+   */
+  const cardHeight = computed(() => {
+    const visibleCount = Object.values(cardConfigs.value).filter(
+      (c) => c.isVisible && !c.isMaximized && !c.isMinimized
+    ).length || 1
+    const rows = Math.max(1, Math.ceil(visibleCount / gridSettings.value.columns))
+    // 预留输入框（约 220px）与上下间距
+    const reservedForInput = 240
+    const availableForGrid = Math.max(0, availableHeight.value - reservedForInput)
+    const perRow = (availableForGrid - gridSettings.value.gap * (rows - 1)) / rows
+    return Math.max(gridSettings.value.minCardHeight, Math.floor(perRow))
+  })
 
   /**
    * 初始化卡片配置
@@ -212,6 +229,8 @@ export const useLayoutStore = defineStore('layout', () => {
 
   /**
    * 重新计算布局 - 支持自动扩展行数，无行数限制
+   * 注意：视图层已使用 CSS Grid (1fr) 自适应，因此这里只更新 position 与
+   * "默认尺寸快照"，不再强行覆盖手动调整后的尺寸，避免用户的拖拽被还原。
    */
   const recalculateLayout = (): void => {
     const visibleCards = Object.values(cardConfigs.value).filter((config) => config.isVisible && !config.isMaximized)
@@ -220,31 +239,29 @@ export const useLayoutStore = defineStore('layout', () => {
       const col = index % gridSettings.value.columns
       const row = Math.floor(index / gridSettings.value.columns)
 
-      // 移除行数限制，所有卡片都可见
-      const newConfig = {
-        ...config,
-        isHidden: false,
-        position: {
-          x: col * (cardWidth.value + gridSettings.value.gap) + gridSettings.value.gap,
-          y: row * (cardHeight.value + gridSettings.value.gap) + gridSettings.value.gap
-        }
+      // 仅更新位置和可见性，size 由视图层负责
+      config.isHidden = false
+      config.position = {
+        x: col * (cardWidth.value + gridSettings.value.gap) + gridSettings.value.gap,
+        y: row * (cardHeight.value + gridSettings.value.gap) + gridSettings.value.gap
       }
 
-      // 更新卡片配置
-      Object.assign(config, newConfig)
-
-      if (!config.isMinimized) {
-        // 更新卡片大小
-        Object.assign(config.size, {
-          width: cardWidth.value,
-          height: cardHeight.value
-        })
-      } else {
+      if (config.isMinimized) {
         // 最小化状态下，保持宽度但设置较小的高度
         Object.assign(config.size, {
           width: cardWidth.value,
-          height: 60 // 最小化后的高度
+          height: 60
         })
+        return
+      }
+
+      // 普通模式：只在尺寸未被用户自定义时同步默认尺寸快照
+      // 用 number 类型判断（"100%" 这种字符串表示由视图层接管，跳过）
+      if (typeof config.size.width === 'number') {
+        config.size.width = cardWidth.value
+      }
+      if (typeof config.size.height === 'number') {
+        config.size.height = cardHeight.value
       }
     })
     saveLayoutConfig()

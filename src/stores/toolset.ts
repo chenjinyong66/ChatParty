@@ -432,6 +432,140 @@ export const useToolsetStore = defineStore('toolset', () => {
     }
   }
 
+  /**
+   * 获取所有自定义提供商
+   */
+  const customProviders = computed(() => toolProviders.value.filter((p) => p.isCustom))
+
+  /**
+   * 获取内置提供商
+   */
+  const builtInProviders = computed(() => toolProviders.value.filter((p) => !p.isCustom))
+
+  /**
+   * 添加自定义工具网站
+   */
+  const addCustomProvider = (config: {
+    name: string
+    url: string
+    icon?: string
+  }): AIProvider => {
+    const id = `custom-tool-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const provider: AIProvider = {
+      id,
+      name: config.name,
+      url: config.url,
+      icon: config.icon || './icons/default.svg',
+      isLoggedIn: false,
+      sessionData: {
+        cookies: [],
+        localStorage: {},
+        sessionStorage: {},
+        isActive: false,
+        lastActiveTime: new Date()
+      },
+      webviewId: `webview-${id}`,
+      isEnabled: false,
+      loadingState: 'idle',
+      retryCount: 0,
+      isCustom: true
+    }
+    toolProviders.value.push(provider)
+    saveCustomProviders()
+    return provider
+  }
+
+  /**
+   * 删除自定义工具网站
+   */
+  const removeCustomProvider = (providerId: string): boolean => {
+    const index = toolProviders.value.findIndex((p) => p.id === providerId && p.isCustom)
+    if (index === -1) return false
+    toolProviders.value.splice(index, 1)
+    selectedProviders.value = selectedProviders.value.filter((id) => id !== providerId)
+    saveSelectedProviders()
+    saveCustomProviders()
+    return true
+  }
+
+  /**
+   * 更新自定义工具网站
+   */
+  const updateCustomProvider = (providerId: string, updates: {
+    name?: string
+    url?: string
+    icon?: string
+  }): boolean => {
+    const provider = toolProviders.value.find((p) => p.id === providerId && p.isCustom)
+    if (!provider) return false
+    if (updates.name !== undefined) provider.name = updates.name
+    if (updates.url !== undefined) provider.url = updates.url
+    if (updates.icon !== undefined) provider.icon = updates.icon
+    saveCustomProviders()
+    return true
+  }
+
+  /**
+   * 持久化自定义工具网站
+   */
+  const saveCustomProviders = (): void => {
+    try {
+      const customList = customProviders.value.map((p) => ({
+        id: p.id,
+        name: p.name,
+        url: p.url,
+        icon: p.icon,
+        isCustom: p.isCustom
+      }))
+      localStorage.setItem('custom-toolset-providers', JSON.stringify(customList))
+    } catch (error) {
+      console.error('Failed to save custom toolset providers:', error)
+    }
+  }
+
+  /**
+   * 加载持久化的自定义工具网站
+   */
+  const loadCustomProviders = (): void => {
+    try {
+      const stored = localStorage.getItem('custom-toolset-providers')
+      if (stored) {
+        const customList = JSON.parse(stored) as Array<{
+          id: string
+          name: string
+          url: string
+          icon?: string
+        }>
+        customList.forEach((item) => {
+          // 避免重复加载
+          if (!toolProviders.value.find((p) => p.id === item.id)) {
+            toolProviders.value.push({
+              id: item.id,
+              name: item.name,
+              url: item.url,
+              icon: item.icon || './icons/default.svg',
+              isLoggedIn: false,
+              sessionData: {
+                cookies: [],
+                localStorage: {},
+                sessionStorage: {},
+                isActive: false,
+                lastActiveTime: new Date()
+              },
+              webviewId: `webview-${item.id}`,
+              isEnabled: false,
+              loadingState: 'idle',
+              retryCount: 0,
+              isCustom: true
+            })
+          }
+        })
+      }
+    } catch (error) {
+      console.error('Failed to load custom toolset providers:', error)
+    }
+  }
+
   return {
     providers: toolProviders,
     toolProviders,
@@ -443,6 +577,8 @@ export const useToolsetStore = defineStore('toolset', () => {
     loggedInProviders,
     totalProviders,
     loggedInCount,
+    customProviders,
+    builtInProviders,
     initializeConversations,
     addMessage,
     updateProviderLoginStatus,
@@ -461,6 +597,11 @@ export const useToolsetStore = defineStore('toolset', () => {
     updateProviderError,
     toggleProvider,
     resetProviderState,
-    updateProviderActiveTime
+    updateProviderActiveTime,
+    addCustomProvider,
+    removeCustomProvider,
+    updateCustomProvider,
+    saveCustomProviders,
+    loadCustomProviders
   }
 })

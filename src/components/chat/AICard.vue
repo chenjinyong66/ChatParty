@@ -156,9 +156,9 @@
       <span>{{ getStatusText() }}</span>
     </div>
 
-    <!-- 调整大小手柄 -->
+    <!-- 调整大小手柄（自适应布局下已不需要，保留代码但默认隐藏，可通过 .show-resize-handle 类启用） -->
     <div
-      v-show="!config?.isMinimized"
+      v-show="!config?.isMinimized && showResizeHandle"
       class="resize-handle"
       @mousedown="startResize"
     >
@@ -281,6 +281,11 @@ const isSummaryCard = computed(() => props.provider.id.startsWith('summary-'))
 const localIsMinimized = ref(false)
 const localIsMaximized = ref(false)
 
+// 是否显示右下角的拖拽手柄。
+// 自适应布局下卡片由 CSS Grid 控制高度，手动调整意义不大，默认隐藏；
+// 如需开启可改为 true（同时建议关闭 recalculateLayout 中的尺寸覆盖）。
+const showResizeHandle = false
+
 // 代理配置
 const proxyConfig = ref({
   enabled: false,
@@ -300,40 +305,45 @@ const cardStyle = computed(() => {
 
   // 对于总结卡片，使用本地状态；对于普通卡片，使用 config 中的状态
   const isMinimized = isSummaryCard.value ? localIsMinimized.value : props.config.isMinimized
+  const isMaximized = isSummaryCard.value ? localIsMaximized.value : props.config.isMaximized
 
-  // 处理 width 和 height，支持字符串（如 "100%"）和数字
-  const width = typeof props.config.size.width === 'string'
-    ? props.config.size.width
-    : `${props.config.size.width}px`
-  const height = isMinimized
-    ? 'auto'
-    : (typeof props.config.size.height === 'string'
-      ? props.config.size.height
-      : `${props.config.size.height}px`)
-
-  return {
-    width,
-    // 修复输入法问题：使用min-height而不是固定height，避免影响输入框
-    height,
-    minHeight: isMinimized ? 'auto' : '0',
+  // 基础样式
+  const baseStyle: Record<string, any> = {
     zIndex: props.config.zIndex,
     transition: 'all 0.3s ease',
     visibility: isHidden ? 'hidden' : 'visible',
     opacity: isHidden ? 0 : 1
   }
+
+  // 最小化：高度自适应内容，宽度填满网格
+  if (isMinimized) {
+    return {
+      ...baseStyle,
+      width: '100%',
+      height: 'auto',
+      minHeight: 'auto'
+    }
+  }
+
+  // 最大化：由 .ai-card.maximized 类样式接管 (position: fixed)
+  if (isMaximized) {
+    return baseStyle
+  }
+
+  // 普通模式：宽高全部 100%，跟随父级 grid 单元自适应屏幕尺寸
+  // 这是修复"卡片不会随屏幕拉高"的关键
+  return {
+    ...baseStyle,
+    width: '100%',
+    height: '100%',
+    minHeight: '0'
+  }
 })
 
 const webviewStyle = computed(() => {
-  if (!props.config) return {}
-
-  // 对于总结卡片，使用本地状态；对于普通卡片，使用 config 中的状态
-  const isMinimized = isSummaryCard.value ? localIsMinimized.value : props.config.isMinimized
-
-  if (isMinimized) return {}
-
-  return {
-    height: `${props.config.size.height - 120}px` // 减去头部和状态栏高度
-  }
+  // WebView 容器使用 flex: 1 自适应高度（见下方 CSS），
+  // 不再用内联像素高度，避免覆盖父级 grid 拉伸效果。
+  return {}
 })
 
 const shouldShowWebView = computed(
@@ -819,6 +829,8 @@ onMounted(() => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-height: 0; /* 关键：允许在 grid/flex 容器中收缩，不再受默认 auto 阻塞 */
+  min-width: 0;
 }
 
 .ai-card.logged-in {
@@ -912,11 +924,11 @@ onMounted(() => {
 
 .webview-container {
   position: relative;
-  overflow: auto; /* 改为auto以支持滚动 */
-  flex: 1;
+  overflow: hidden; /* WebView 内部自带滚动，这里防止双滚动条 */
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  min-height: 300px; /* 设置最小高度 */
+  min-height: 0; /* 关键：允许在弹性容器中正确收缩，避免父级出现空白 */
 }
 
 .webview-placeholder {
